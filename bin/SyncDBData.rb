@@ -68,7 +68,7 @@ $logger.open($build_config.output.log_path, 'sync_dbdata')
 
 $from_local = $build_config.layout.dbdata_path
 $to_local = $from_local
-$from_https = $build_config.tools.https_data_path.fix_pathname unless $build_config.tools.https_data_path.nil?
+$from_https = $build_config.sync.https.data_path.fix_pathname unless $build_config.sync.https.data_path.nil?
 
 # ---------
 
@@ -76,7 +76,6 @@ $source_path = nil
 $target_path = nil
 $src_fs = nil
 $tgt_fs = nil
-$continue = false
 $source_overwritten = false
 $target_overwritten = false
 
@@ -97,56 +96,56 @@ def parse_commandline(opts)
         $build_config.layout.product_data_path = File.expand_path(argument.to_s).fix_pathname
       when '--from-https'
         raise 'Can only have one source' if $source_overwritten
-        $source = :https
+        $build_config.sync.source = :https
         $source_overwritten = true
         $from_https = argument.to_s.fix_pathname unless argument.to_s.strip.empty?
       when '--from-local'
         raise 'Can only have one source' if $source_overwritten
-        $source = :local
+        $build_config.sync.source = :local
         $source_overwritten = true
         $from_local = File.expand_path(argument.to_s).fix_pathname unless argument.to_s.strip.empty?
       when '--to-local'
         raise 'Can only have one target' if $target_overwritten
-        $target = :local
+        $build_config.sync.target = :local
         $target_overwritten = true
         $to_local = File.expand_path(argument.to_s).fix_pathname unless argument.to_s.strip.empty?
       when '--continue'
-        $continue = true
+        $build_config.sync.continue = true
     end
   end
 
   display_info if opts.has_key?('--info')
 
-  if $source == :https then
+  if $build_config.sync.source == :https then
     $logger.writeln "Syncing from HTTPS (#{$from_https})"
-  elsif $source == :local then
+  elsif $build_config.sync.source == :local then
     $logger.writeln "Syncing from local (#{$from_local})"
   end
 
   $logger.writeln "Syncing to local (#{$to_local}):"
 
-  if ($target != :local) then
+  if ($build_config.sync.target != :local) then
     $logger.error "Sorry, syncing to HTTPS is not supported (anymore)."
   end
 
-  require 'HTTPSDownloader.rb' if $source == :https
+  require 'HTTPSDownloader.rb' if $build_config.sync.source == :https
 
   connect
 end
 
 def connect
-  if $source == :https then
+  if $build_config.sync.source == :https then
     if /^(https\:\/\/)?([^\/:]+)(\:(\d+))?(\/.*)?$/i.match($from_https) then
       https_base_url = $from_https
-      $logger.warn 'Username and/or password not specified. If needed, specify $https_data_username and $https_data_password in the project user settings' if $build_config.tools.https_data_username.nil? || $build_config.tools.https_data_password.nil?
+      $logger.warn 'Username and/or password not specified. If needed, specify $build_config.sync.https.username and $build_config.sync.https.password in the project user settings' if $build_config.sync.https.username.nil? || $build_config.sync.https.password.nil?
     else
       $logger.error "Not a valid HTTPS location: #{$from_https}"
     end
     $src_fs = HTTPSDownloader.new($logger)
-    $src_fs.connect https_base_url, $build_config.tools.https_data_username, $build_config.tools.https_data_password
+    $src_fs.connect https_base_url, $build_config.sync.https.username, $build_config.sync.https.password
     $source_path = ''
 
-  elsif $source == :local then
+  elsif $build_config.sync.source == :local then
     $logger.error "Source path empty or not given." if $from_local.to_s.strip.empty?
     $logger.error "Source path '#{$from_local}' not found." unless (File.exist?($from_local) && File.directory?($from_local))
     $src_fs = nil
@@ -306,7 +305,7 @@ def sync
         elsif file_exists(copy_from, $src_fs) then
           sync_normal(datasource, copy_from)
         else
-          if $continue then
+          if $build_config.sync.continue then
             $logger.writeln "File not found: #{copy_from}" unless is_infofile
           else
             $logger.error "File not found: #{copy_from}" unless is_infofile

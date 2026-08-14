@@ -42,9 +42,14 @@ class BuildConfig
     :essentials_function_prefix, :unittest_prefix
   )
 
+  Db = Struct.new(:postgres)
+
+  Https = Struct.new(:data_path, :username, :password)
+
+  Sync = Struct.new(:source, :target, :continue, :https)
+
   Tools = Struct.new(
     :git_bin_path,
-    :https_data_path, :https_data_username, :https_data_password,
     :max_threads, :on_uncommitted_changes, :hint_level
   )
 
@@ -55,14 +60,15 @@ class BuildConfig
   )
 
   attr_accessor :product
-  attr_reader :layout, :output, :postgres, :tools, :session
+  attr_reader :layout, :output, :db, :sync, :tools, :session
   attr_reader :internal_common_sql_paths, :internal_common_data_paths
 
-  def initialize(product, layout, output, postgres, tools, session)
+  def initialize(product, layout, output, db, sync, tools, session)
     @product = product
     @layout = layout
     @output = output
-    @postgres = postgres
+    @db = db
+    @sync = sync
     @tools = tools
     @session = session
     @internal_common_sql_paths = []
@@ -74,8 +80,9 @@ class BuildConfig
       nil,
       Layout.new(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil),
       Output.new(nil, nil, nil, nil),
-      Postgres.new(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil),
-      Tools.new(nil, nil, nil, nil, nil, nil, nil),
+      Db.new(Postgres.new(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)),
+      Sync.new(nil, nil, nil, Https.new(nil, nil, nil)),
+      Tools.new(nil, nil, nil, nil),
       Session.new(nil, nil, [], nil, [])
     )
   end
@@ -87,34 +94,38 @@ class BuildConfig
     output.output_path = File.expand_path(output.target_path + '/build/').fix_pathname
     output.temp_path = File.expand_path(output.target_path + '/temp/').fix_pathname
 
-    postgres.username = 'aerius'
-    postgres.password = 'aerius'
+    db.postgres.username = 'aerius'
+    db.postgres.password = 'aerius'
 
     if !ENV['POSTGRESQL_BIN'].nil? then
-      postgres.bin_path = ENV['POSTGRESQL_BIN']
+      db.postgres.bin_path = ENV['POSTGRESQL_BIN']
     elsif ON_WINDOWS then
       if !ENV['CommonProgramW6432'].nil? then
-        postgres.bin_path = Utility.find_best_postgresql_path(File.expand_path(ENV['CommonProgramW6432'] + '/../'))
+        db.postgres.bin_path = Utility.find_best_postgresql_path(File.expand_path(ENV['CommonProgramW6432'] + '/../'))
       elsif !ENV['ProgramFiles(x86)'].nil? then
-        postgres.bin_path = Utility.find_best_postgresql_path(ENV['ProgramFiles(x86)'])
+        db.postgres.bin_path = Utility.find_best_postgresql_path(ENV['ProgramFiles(x86)'])
       elsif !ENV['ProgramFiles'].nil? then
-        postgres.bin_path = Utility.find_best_postgresql_path(ENV['ProgramFiles'])
+        db.postgres.bin_path = Utility.find_best_postgresql_path(ENV['ProgramFiles'])
       end
     else
-      postgres.bin_path = ''
+      db.postgres.bin_path = ''
     end
 
-    postgres.template = 'template0'
-    postgres.tablespace = ''
-    postgres.collation = ''
-    postgres.name_prefix = DEFAULT_DATABASE_NAME_PREFIX
-    postgres.essentials_function_prefix = 'system.'
-    postgres.unittest_prefix = 'unittest_'
+    db.postgres.template = 'template0'
+    db.postgres.tablespace = ''
+    db.postgres.collation = ''
+    db.postgres.name_prefix = DEFAULT_DATABASE_NAME_PREFIX
+    db.postgres.essentials_function_prefix = 'system.'
+    db.postgres.unittest_prefix = 'unittest_'
 
     tools.git_bin_path = GitUtility.default_bin_path
     tools.max_threads = 10
     tools.on_uncommitted_changes = :warn
     tools.hint_level = HINT_LEVEL_ALL
+
+    sync.source = :https
+    sync.target = :local
+    sync.continue = false
 
     self
   end
@@ -189,18 +200,18 @@ class BuildConfig
     raise 'Temp path not set ($build_config.output.temp_path)' if output.temp_path.nil?
     raise 'Output path not set ($build_config.output.output_path)' if output.output_path.nil?
     raise 'Log path not set ($build_config.output.log_path)' if output.log_path.nil?
-    raise 'Database name prefix not set ($build_config.postgres.name_prefix)' if postgres.name_prefix.nil?
-    raise 'PostgreSQL bin path not set ($build_config.postgres.bin_path)' if postgres.bin_path.nil?
-    unless !ON_WINDOWS && postgres.bin_path.empty?
-      postgres.bin_path = PathAssert.require_directory(postgres.bin_path, 'postgres.bin_path')
+    raise 'Database name prefix not set ($build_config.db.postgres.name_prefix)' if db.postgres.name_prefix.nil?
+    raise 'PostgreSQL bin path not set ($build_config.db.postgres.bin_path)' if db.postgres.bin_path.nil?
+    unless !ON_WINDOWS && db.postgres.bin_path.empty?
+      db.postgres.bin_path = PathAssert.require_directory(db.postgres.bin_path, 'db.postgres.bin_path')
     end
-    raise 'PostgreSQL username not set ($build_config.postgres.username)' if postgres.username.nil? || postgres.username.to_s.empty?
-    raise 'PostgreSQL password not set ($build_config.postgres.password)' if postgres.password.nil? || postgres.password.to_s.empty?
+    raise 'PostgreSQL username not set ($build_config.db.postgres.username)' if db.postgres.username.nil? || db.postgres.username.to_s.empty?
+    raise 'PostgreSQL password not set ($build_config.db.postgres.password)' if db.postgres.password.nil? || db.postgres.password.to_s.empty?
 
     output.log_path = output.log_path.fix_pathname
-    output.output_path = output.output_path.fix_pathname
-    output.temp_path = output.temp_path.fix_pathname
-    tools.git_bin_path = tools.git_bin_path.fix_pathname unless (tools.git_bin_path.nil? || tools.git_bin_path.empty?)
+    output.output_path = output.output_path.form_pathname
+    output.temp_path = output.temp_path.form_pathname
+    tools.git_bin_path = tools.git_bin_path.form_pathname unless (tools.git_bin_path.nil? || tools.git_bin_path.empty?)
 
     self
   end
@@ -209,14 +220,14 @@ class BuildConfig
   def apply_common_module_paths(external_sql_paths, external_data_paths)
     builtin_sql = PathConventions.join(
       PathConventions.database_build_root, PathConventions::BUILTIN_COMMON_SQL_REL
-    ).fix_pathname
+    ).form_pathname
 
     layout.common_sql_paths = (
       @internal_common_sql_paths + external_sql_paths + [builtin_sql]
-    ).map { |path| path.fix_pathname.chomp('/') }
+    ).map { |path| path.form_pathname.chomp('/') }
     layout.common_data_paths = (
       @internal_common_data_paths + external_data_paths
-    ).map { |path| path.fix_pathname.chomp('/') }
+    ).map { |path| path.form_pathname.chomp('/') }
 
     layout.common_sql_paths.map!.with_index { |path, idx|
       PathAssert.require_directory(path, "common_sql_paths[#{idx}]")
@@ -233,8 +244,9 @@ class BuildConfig
     logger.writeln "product: #{product}"
     log_struct(logger, 'layout', layout)
     log_struct(logger, 'output', output)
-    log_struct(logger, 'postgres', postgres, [:password])
-    log_struct(logger, 'tools', tools, [:https_data_password])
+    log_struct(logger, 'db.postgres', db.postgres, [:password])
+    log_struct(logger, 'sync', sync, [], { https: [:password] })
+    log_struct(logger, 'tools', tools)
     log_struct(logger, 'session', session)
   end
 
@@ -243,9 +255,15 @@ class BuildConfig
   #
   private
 
-  def log_struct(logger, name, struct, mask = [])
+  # nested_masks: { member_name => [secret_fields] } for Struct-valued members
+  def log_struct(logger, name, struct, mask = [], nested_masks = {})
     struct.members.each do |member|
       value = struct[member]
+      if value.is_a?(Struct)
+        nested_mask = nested_masks[member] || []
+        log_struct(logger, "#{name}.#{member}", value, nested_mask)
+        next
+      end
       value = '<set>' if mask.include?(member) && !value.nil? && !value.to_s.empty?
       value = '<none>' if value.nil? || (value.respond_to?(:empty?) && value.empty?)
       if value.is_a?(Array)

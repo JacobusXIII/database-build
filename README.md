@@ -24,7 +24,7 @@ build-config/
   scripts/            # runscripts
 ```
 
-All settings are stored on `$build_config` (`BuildConfig.rb`) in groups. Settings files should assign into `$build_config` (no separate settings `$globals`).
+All settings are stored on `$build_config` (`BuildConfig.rb`) in groups. Settings files should assign into `$build_config`.
 Optional: set `layout.product_sql_path` / `layout.product_data_path` before finalize to override the `<product>` subfolder convention (paths relative to `source_path`).
 
 | Group | Description |
@@ -99,11 +99,12 @@ Typical `AppSettings.rb` / `UserSettings.rb` assignments:
 
 - `$build_config.layout.dbdata_path` (default `<workspace>/dbdata/`)
 - `$build_config.layout.external_common_modules_file`
-- `$build_config.postgres.name_prefix` (default `AERIUS`)
-- `$build_config.postgres.username` / `.password` (default `aerius`)
-- `$build_config.tools.https_data_path` / `.https_data_username` / `.https_data_password`
+- `$build_config.db.postgres.name_prefix` (default `AERIUS`)
+- `$build_config.db.postgres.username` / `.password` (default `aerius`)
+- `$build_config.sync.source` / `.target` (default `:https` / `:local`)
+- `$build_config.sync.https.data_path` / `.username` / `.password`
 
-`SyncDBData.rb --from-https` downloads into `$build_config.layout.dbdata_path` from `$build_config.tools.https_data_path` (or from `--from-https` / `--to-local` when given).
+`SyncDBData.rb --from-https` downloads into `$build_config.layout.dbdata_path` from `$build_config.sync.https.data_path` (or from `--from-https` / `--to-local` when given).
 
 ### Docker
 

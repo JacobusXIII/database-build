@@ -54,8 +54,8 @@ mkdir -p "${DBDATA_PATH}"
 echo "\$build_config.layout.dbdata_path = '${DBDATA_PATH}'" >> "${DBCONFIG_PATH}/UserSettings.rb"
 
 # configure repo with the HTTPS credentials given if set
-[[ -n "${HTTPS_DATA_USERNAME}" ]] && echo "\$build_config.tools.https_data_username = '${HTTPS_DATA_USERNAME}'" >> "${DBCONFIG_PATH}/UserSettings.rb"
-[[ -n "${HTTPS_DATA_PASSWORD}" ]] && echo "\$build_config.tools.https_data_password = '${HTTPS_DATA_PASSWORD}'" >> "${DBCONFIG_PATH}/UserSettings.rb"
+[[ -n "${HTTPS_DATA_USERNAME}" ]] && echo "\$build_config.sync.https.username = '${HTTPS_DATA_USERNAME}'" >> "${DBCONFIG_PATH}/UserSettings.rb"
+[[ -n "${HTTPS_DATA_PASSWORD}" ]] && echo "\$build_config.sync.https.password = '${HTTPS_DATA_PASSWORD}'" >> "${DBCONFIG_PATH}/UserSettings.rb"
 
 # Docker always uses clean build for external common modules (clone at pinned gitref).
 BUILD_FLAG_ARGS=(--flags clean)
