@@ -17,9 +17,8 @@ require 'PostgresTools.rb'
 def display_help
   puts "Syntax:\n  ruby #{File.basename(__FILE__)} product-settings-file [parameters]\n\n"
   puts "  product-settings-file"
-  puts "                      Path and filename of product settings of product to"
-  puts "                      sync datasources for. Contains $product and references to paths of"
-  puts "                      project, product data and sql, and common data and sql."
+  puts "                      Path to product settings, or a profile name under"
+  puts "                      src/build/profiles/."
   puts "\nParameters:"
   puts "  -p --path           Path where the to-be-parsed SQL files are located (export of"
   puts "                      database/src/build/scripts/sql). Supply if different from"

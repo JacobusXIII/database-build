@@ -12,7 +12,17 @@ $build_config.layout.source_path = '.'
 $build_config.layout.build_config_path = 'src/build'
 ```
 
-Paths may be relative to the product `settings.rb` directory.
+Paths may be relative to the product settings (profile) directory.
+
+Product settings live under a fixed `src/build/profiles/` directory (CLI may pass a full path or a bare profile name resolved there). Sibling of `profiles/`:
+
+```text
+src/build/
+  profiles/           # product settings
+    latest.rb
+  externals/
+    modules.rb        # used automatically when present
+```
 
 `$build_config.layout.build_config_path` has a fixed layout:
 
@@ -32,37 +42,34 @@ Optional: set `layout.product_sql_path` / `layout.product_data_path` before fina
 | `product` | Product identity |
 | `layout` | Where source, modules, data, and scripts live |
 | `output` | Where build artifacts and logs are written |
-| `postgres` | How to talk to PostgreSQL |
+| `db` | Database implementations (e.g. `db.postgres`) |
+| `sync` | Sync modes and implementations (e.g. `sync.https`) |
 | `tools` | Ancillary tooling and build behaviour |
 | `session` | Per-run invocation state |
 
 Field names and defaults: see [`bin/BuildConfig.rb`](bin/BuildConfig.rb).
 
-Layout path defaults (specified under `layout` in the `BuildConfig.rb`):
+Layout path conventions (derived in `BuildConfig.rb`; not product assignments unless noted):
 
 | Field | Convention |
 |---|---|
-| `product_sql_path` | `<source_path>/src/main/sql/<product>/` |
-| `product_data_path` | `<source_path>/src/data/sql/<product>/` |
-| `runscripts_path` | `<build_config_path>/scripts/` |
+| `product_sql_path` | `<source_path>/src/main/sql/<product>/` (overridable) |
+| `product_data_path` | `<source_path>/src/data/sql/<product>/` (overridable) |
+| `runscripts_path` | `<build_config_path>/scripts/` (fixed) |
+| `external_common_modules_file` | `<profiles_dir>/../externals/modules.rb` when that file exists (fixed) |
 | `common_sql_paths` / `common_data_paths` | Arrays of dirs merged after `SettingsLoader.prepare` (internal + external + builtin) |
-| `external_common_modules_file` | Optional path to a modules file (relative to product settings dir or absolute) |
 
 Common module locations (each type its own entry):
 
 - **Internal** (beside product source) — optional. Same parent as `<source_path>`: `modules/src/main/sql` and `modules/src/data/sql`.
-- **External** — optional. Declared in a modules file via `layout.external_common_modules_file` (any HTTPS repo; sql/data paths inside each repo are fixed: `source/modules/src/{main,data}/sql`). Materialized under `<output.target_path>/externals/`.
+- **External** — optional. Declared in `src/build/externals/modules.rb` beside `profiles/` (any HTTPS repo; sql/data paths inside each repo are fixed: `source/modules/src/{main,data}/sql`). Materialized under `<output.target_path>/externals/`.
 - **Builtin** (SQL only) — required. `database-build/common/src/main/sql`.
 
 The workspace is the parent of the `database-build` checkout. Product repos, external module repos, and the `dbdata/` folder usually live there as siblings. Dev builds copy external modules from siblings of the **product** git root (normally the same workspace).
 
 ### External modules file
 
-Set in product or App settings:
-
-```ruby
-$build_config.layout.external_common_modules_file = 'externals/modules.rb'
-```
+Fixed path relative to the product settings (profile) directory: `../externals/modules.rb`. No settings assignment.
 
 Modules file content (assigns `$build_config.session.common_module_versions`):
 
@@ -85,12 +92,12 @@ $build_config.session.common_module_versions = [
 | Clean (`--flags clean` / Docker) | `git clone` + checkout each `git_reference` |
 
 ```bash
-# Dev
-ruby bin/SyncDBData.rb path/to/settings.rb --to-local
-ruby bin/Build.rb default path/to/settings.rb --version '#'
+# Dev (from the product Maven module; profile name under src/build/profiles/)
+ruby bin/SyncDBData.rb latest --to-local
+ruby bin/Build.rb default latest --version '#'
 
 # Clean
-ruby bin/Build.rb default path/to/settings.rb --flags clean --version '#'
+ruby bin/Build.rb default latest --flags clean --version '#'
 ```
 
 ### Overridable settings
@@ -98,7 +105,6 @@ ruby bin/Build.rb default path/to/settings.rb --flags clean --version '#'
 Typical `AppSettings.rb` / `UserSettings.rb` assignments:
 
 - `$build_config.layout.dbdata_path` (default `<workspace>/dbdata/`)
-- `$build_config.layout.external_common_modules_file`
 - `$build_config.db.postgres.name_prefix` (default `AERIUS`)
 - `$build_config.db.postgres.username` / `.password` (default `aerius`)
 - `$build_config.sync.source` / `.target` (default `:https` / `:local`)

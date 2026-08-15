@@ -6,6 +6,8 @@ module PathConventions
   DATA_REL = 'src/data/sql'
   MODULES_DIR = 'modules'
   DBDATA_DIR = 'dbdata'
+  PROFILES_REL = 'src/build/profiles'
+  EXTERNAL_COMMON_MODULES_REL = '../externals/modules.rb'
   BUILTIN_COMMON_SQL_REL = 'common/src/main/sql'
   EXTERNAL_MODULES_SQL_REL = 'source/modules/src/main/sql'
   EXTERNAL_MODULES_DATA_REL = 'source/modules/src/data/sql'

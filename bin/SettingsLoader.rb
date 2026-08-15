@@ -71,11 +71,17 @@ class SettingsLoader
     if product_settings_file_argument.nil? || product_settings_file_argument.start_with?('-') then
       puts 'Specify a product-settings file. See --help for more information.'
       exit
-    else
-      product_settings_file = expand_with_suffixes(product_settings_file_argument, ['.rb', 'Settings.rb'])
-      # Cannot live in BuildConfig#finalize: must exist before require and before
-      return PathAssert.require_file(product_settings_file, 'product_settings_file')
     end
+
+    # Absolute / CWD-relative path first; otherwise under fixed src/build/profiles/.
+    product_settings_file = expand_with_suffixes(product_settings_file_argument, ['.rb', 'Settings.rb'])
+    unless File.file?(product_settings_file)
+      under_profiles = File.join(PathConventions::PROFILES_REL, product_settings_file_argument)
+      product_settings_file = expand_with_suffixes(under_profiles, ['.rb', 'Settings.rb'])
+    end
+
+    # Cannot live in BuildConfig#finalize: must exist before require and before finalize.
+    PathAssert.require_file(product_settings_file, 'product_settings_file')
   end
 
   # First absolute path or relative to CWD; otherwise under layout.runscripts_path.

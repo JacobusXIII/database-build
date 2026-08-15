@@ -180,14 +180,9 @@ class BuildConfig
       PathConventions.internal_modules_data(layout.source_path)
     ].compact
 
-    if layout.external_common_modules_file.nil? || layout.external_common_modules_file.to_s.empty?
-      layout.external_common_modules_file = nil
-    else
-      layout.external_common_modules_file = PathAssert.require_file(
-        PathConventions.expand_from(product_settings_dir, layout.external_common_modules_file),
-        'external_common_modules_file'
-      )
-    end
+    # Fixed beside profiles/: <product_settings_dir>/../externals/modules.rb when present.
+    modules_file = PathConventions.expand_from(product_settings_dir, PathConventions::EXTERNAL_COMMON_MODULES_REL)
+    layout.external_common_modules_file = File.file?(modules_file) ? modules_file : nil
 
     layout.runscripts_path = PathAssert.require_directory(
       PathConventions.join(layout.build_config_path, SCRIPTS_DIR),
@@ -209,9 +204,9 @@ class BuildConfig
     raise 'PostgreSQL password not set ($build_config.db.postgres.password)' if db.postgres.password.nil? || db.postgres.password.to_s.empty?
 
     output.log_path = output.log_path.fix_pathname
-    output.output_path = output.output_path.form_pathname
-    output.temp_path = output.temp_path.form_pathname
-    tools.git_bin_path = tools.git_bin_path.form_pathname unless (tools.git_bin_path.nil? || tools.git_bin_path.empty?)
+    output.output_path = output.output_path.fix_pathname
+    output.temp_path = output.temp_path.fix_pathname
+    tools.git_bin_path = tools.git_bin_path.fix_pathname unless (tools.git_bin_path.nil? || tools.git_bin_path.empty?)
 
     self
   end
@@ -220,14 +215,14 @@ class BuildConfig
   def apply_common_module_paths(external_sql_paths, external_data_paths)
     builtin_sql = PathConventions.join(
       PathConventions.database_build_root, PathConventions::BUILTIN_COMMON_SQL_REL
-    ).form_pathname
+    ).fix_pathname
 
     layout.common_sql_paths = (
       @internal_common_sql_paths + external_sql_paths + [builtin_sql]
-    ).map { |path| path.form_pathname.chomp('/') }
+    ).map { |path| path.fix_pathname.chomp('/') }
     layout.common_data_paths = (
       @internal_common_data_paths + external_data_paths
-    ).map { |path| path.form_pathname.chomp('/') }
+    ).map { |path| path.fix_pathname.chomp('/') }
 
     layout.common_sql_paths.map!.with_index { |path, idx|
       PathAssert.require_directory(path, "common_sql_paths[#{idx}]")
